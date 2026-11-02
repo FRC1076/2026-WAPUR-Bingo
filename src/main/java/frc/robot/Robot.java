@@ -1,18 +1,36 @@
+// Copyright (c) FRC 1076 PiHi Samurai
+// You may use, distribute, and modify this software under the terms of
+// the license found in the root directory of this project
+
 // Copyright (c) FIRST and other WPILib contributors.
 // Open Source Software; you can modify and/or share it under the terms of
 // the WPILib BSD license file in the root directory of this project.
 
 package frc.robot;
 
+import frc.robot.Constants.CANConstants;
+import frc.robot.Constants.SystemConstants;
+import frc.robot.Constants.SystemConstants.RobotMode;
+
+import edu.wpi.first.wpilibj.PowerDistribution;
+import edu.wpi.first.wpilibj.RobotBase;
+import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+
+import org.littletonrobotics.junction.AutoLogOutputManager;
 import org.littletonrobotics.junction.LogFileUtil;
+import org.littletonrobotics.junction.LoggedPowerDistribution;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.NT4Publisher;
 import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import com.ctre.phoenix6.SignalLogger;
+import com.revrobotics.util.StatusLogger;
+
 
 /**
  * The methods in this class are called automatically corresponding to each mode, as described in
@@ -29,12 +47,29 @@ public class Robot extends LoggedRobot {
      * initialization code.
      */
     public Robot() {
-        Logger.recordMetadata("ProjectName", "MyProject"); // Set a metadata value
-
-        // TASK: change this block to allow for simulation
-        if (isReal()) {
+        // Configure AdvantageKit. This must be done BEFORE any other instatiation
+        Logger.recordMetadata("ProjectName", BuildConstants.MAVEN_NAME);
+        Logger.recordMetadata("BuildDate", BuildConstants.BUILD_DATE);
+        Logger.recordMetadata("GitSHA", BuildConstants.GIT_SHA);
+        Logger.recordMetadata("GitDate", BuildConstants.GIT_DATE);
+        Logger.recordMetadata("GitBranch", BuildConstants.GIT_BRANCH);
+        switch (BuildConstants.DIRTY) {
+            case 0:
+                Logger.recordMetadata("GitDirty", "All changes committed");
+                break;
+            case 1:
+                Logger.recordMetadata("GitDirty", "Uncomitted changes");
+                break;
+            default:
+                Logger.recordMetadata("GitDirty", "Unknown");
+                break;
+        }
+        
+        if (SystemConstants.kMode == RobotMode.REAL || RobotBase.isReal()) {
             Logger.addDataReceiver(new WPILOGWriter()); // Log to a USB stick ("/U/logs")
             Logger.addDataReceiver(new NT4Publisher()); // Publish data to NetworkTables
+        } else if (SystemConstants.kMode == RobotMode.SIM) {
+            Logger.addDataReceiver(new NT4Publisher());
         } else {
             setUseTiming(false); // Run as fast as possible
             String logPath = LogFileUtil.findReplayLog(); // Pull the replay log from AdvantageScope (or prompt the user)
@@ -42,11 +77,33 @@ public class Robot extends LoggedRobot {
             Logger.addDataReceiver(new WPILOGWriter(LogFileUtil.addPathSuffix(logPath, "_sim"))); // Save outputs to a new log
         }
 
+        AutoLogOutputManager.addPackage("lib");
+
+        // Register PDH?
+        // Enable the switchable channel
+        final PowerDistribution pdh = new PowerDistribution(CANConstants.kPdhCanId, ModuleType.kRev);
+        pdh.setSwitchableChannel(SystemConstants.kEnableSwitchablePDHChannel);
+        pdh.close();
+        LoggedPowerDistribution.getInstance(CANConstants.kPdhCanId, ModuleType.kRev);
+
         Logger.start(); // Start logging! No more data receivers, replay sources, or metadata values may be added.
+
+        SignalLogger.enableAutoLogging(SystemConstants.kEnableSignalLogger);
+
+        if(!SystemConstants.kEnableStatusLogger) {
+            StatusLogger.disableAutoLogging();
+        }
 
         // Instantiate our RobotContainer.  This will perform all our button bindings, and put our
         // autonomous chooser on the dashboard.
         m_robotContainer = new RobotContainer();
+
+        if (SystemConstants.kEnableRTPriority) {
+            CommandScheduler.getInstance().schedule(RobotContainer.threadCommand());
+        }
+
+        // Change brownout voltage
+        RobotController.setBrownoutVoltage(SystemConstants.kBrownoutVoltage);
     }
 
     /**
@@ -72,16 +129,14 @@ public class Robot extends LoggedRobot {
     @Override
     public void disabledPeriodic() {}
 
-    /**
-     * This autonomous runs the autonomous command selected by your {@link RobotContainer} class.
-     */
+    /** This autonomous runs the autonomous command selected by your {@link RobotContainer} class. */
     @Override
     public void autonomousInit() {
         m_autonomousCommand = m_robotContainer.getAutonomousCommand();
 
         // schedule the autonomous command (example)
         if (m_autonomousCommand != null) {
-            CommandScheduler.getInstance().schedule(m_autonomousCommand);
+        CommandScheduler.getInstance().schedule(m_autonomousCommand);
         }
     }
 
@@ -96,7 +151,7 @@ public class Robot extends LoggedRobot {
         // continue until interrupted by another command, remove
         // this line or comment it out.
         if (m_autonomousCommand != null) {
-            m_autonomousCommand.cancel();
+        m_autonomousCommand.cancel();
         }
     }
 
