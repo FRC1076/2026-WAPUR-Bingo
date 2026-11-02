@@ -9,7 +9,6 @@ import frc.robot.Constants.OIConstants;
 import frc.robot.commands.ExampleCommand;
 import frc.robot.subsystems.Elastic;
 import frc.robot.subsystems.ExampleSubsystem;
-import lib.hardware.hid.SamuraiPS5Controller;
 import lib.hardware.hid.SamuraiXboxController;
 
 import com.ctre.phoenix6.CANBus.CANBusStatus;
